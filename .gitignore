@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+env/
+.conda/
+.ipynb_checkpoints/
+.vscode/
+
+# configx files
+*.msgpack
+history.log
+configx/pyproject.toml
+readmefiles/arch.md
+readmefiles/README.md
+readmefiles/rules.md
+readmefiles/ruleset.md
+readmefiles/structure.txt
