@@ -86,4 +86,11 @@ class ConfigXQLInterpreter:
 
     def _exec_delete(self, node: DeleteNode):
         path = ".".join(node.path)
-        return self.tree.delete(path)
+        retr = self.tree.delete(path)
+        
+        # Design-Choice : Choosing to keep DELETE idempotent/safe
+         
+        # if not retr:
+        #  raise ConfigPathNotFoundError(path)
+        
+        return retr

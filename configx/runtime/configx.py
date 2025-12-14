@@ -26,6 +26,62 @@ from configx.core.tree import ConfigTree
 from configx.storage.runtime import StorageRuntime
 from configx.qlang.interpreter import ConfigXQLInterpreter
 import os, json
+import atexit
+
+from colorama import Fore, Style, init
+init(autoreset=True)
+
+
+from colorama import Fore, Style, init
+init(autoreset=True)
+
+
+class _TreeRenderer:
+    ROOT = Style.BRIGHT + Fore.WHITE
+
+    OBJ = Fore.WHITE
+    VAL = Fore.GREEN              # ConfigX accent
+    TYPE = Fore.LIGHTBLACK_EX     # subtle gray
+    TREE = Fore.LIGHTBLACK_EX     # structure only
+
+
+    @classmethod
+    def render(cls, node, prefix="", is_last=True, show_values=False):
+        lines = []
+
+        connector = "└── " if is_last else "├── "
+        line = prefix + cls.TREE + connector
+
+        # Object node (has children)
+        if node.children:
+            line += cls.OBJ + node.name
+            lines.append(line)
+
+            new_prefix = prefix + cls.TREE + ("    " if is_last else "│   ")
+
+            children = list(node.children.values())
+            for i, child in enumerate(children):
+                lines.extend(
+                    cls.render(
+                        child,
+                        prefix=new_prefix,
+                        is_last=(i == len(children) - 1),
+                        show_values=show_values
+                    )
+                )
+
+        # Value node (leaf)
+        else:
+            line += cls.VAL + node.name
+            line += cls.TYPE + f" : {node.type or 'UNKNOWN'}"
+
+            if show_values and node.value is not None:
+                line += cls.TYPE + " = " + repr(node.value)
+
+            lines.append(line)
+
+        return lines
+
 
 class ConfigX:
     """
@@ -56,6 +112,8 @@ class ConfigX:
         # Core in-memory structure
         self._tree = ConfigTree()
         self._intp = ConfigXQLInterpreter(self._tree)
+        self._closed = False # Made close() idempotent
+
 
         # Persistence runtime (optional)
         self._storage = None
@@ -86,6 +144,9 @@ class ConfigX:
         if load_json:
             self.load_json(load_json)
 
+        if persistent:
+            atexit.register(self.close) #Auto-close on program exit as a safety feature
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -110,15 +171,42 @@ class ConfigX:
 
     def close(self):
         """
-        Gracefully shut down the runtime.
-
-        If persistence is enabled, this will:
-        - write a snapshot
-        - clear the WAL
+        Flush state to disk (snapshot + WAL cleanup).
+        Safe to call multiple times
         """
+        if self._closed:
+            return
+
         if self._storage:
             self._storage.shutdown(self._tree)
 
+        self._closed = True
+
+    def print_tree(self, hide_values=False) -> str:
+        """
+        Pretty-print the current ConfigX state as a tree.
+        """
+        from configx.core.node import Node
+
+        root = self._tree.root
+
+        lines = [
+            _TreeRenderer.ROOT + "ConfigX"
+        ]
+
+        children = list(root.children.values())
+        for i, child in enumerate(children):
+            lines.extend(
+                _TreeRenderer.render(
+                    child,
+                    prefix="",
+                    is_last=(i == len(children) - 1),
+                    show_values=not hide_values
+                )
+            )
+
+        print("\n".join(lines))
+    
     # ------------------------------------------------------------------
     # Introspection helpers
     # ------------------------------------------------------------------
